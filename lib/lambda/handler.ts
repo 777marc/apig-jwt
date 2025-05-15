@@ -4,6 +4,7 @@ import {
   Context,
 } from "aws-lambda";
 import { getSecret } from "../utils/utils";
+import jwt, { Secret, JwtPayload } from "jsonwebtoken";
 
 async function handler(
   event: APIGatewayProxyEvent,
@@ -11,10 +12,24 @@ async function handler(
 ): Promise<APIGatewayProxyResult> {
   switch (event.httpMethod) {
     case "GET":
+      const authToken = event.headers.Authorization || "";
+
+      if (!authToken) {
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ message: "no token" }),
+        };
+      }
+
+      const token = authToken.replace("Bearer ", "");
+      const SECRET_KEY = process.env.SECRET_KEY || "abc123";
+      const decoded = jwt.verify(token, SECRET_KEY);
+
       return {
         statusCode: 200,
-        body: JSON.stringify({ message: "validate token" }),
+        body: JSON.stringify({ message: decoded }),
       };
+
     case "POST":
       const secret = await getSecret();
       let creds;
@@ -30,11 +45,13 @@ async function handler(
 
       if (event.body) {
         const { username, password } = JSON.parse(event.body);
+        const SECRET_KEY = process.env.SECRET_KEY || "abc123";
 
         if (creds.username === username && creds.password === password) {
+          const token = jwt.sign({ username, password }, SECRET_KEY);
           return {
             statusCode: 200,
-            body: JSON.stringify({ message: "getting token" }),
+            body: JSON.stringify({ token }),
           };
         } else {
           return {
